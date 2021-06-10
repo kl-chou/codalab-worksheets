@@ -110,6 +110,7 @@ BUNDLE_COMMANDS = (
     'edit',
     'detach',
     'rm',
+    'ancestors',
     'search',
     'ls',
     'info',
@@ -2047,6 +2048,47 @@ class BundleCLI(object):
         else:
             for uuid in deleted_uuids:
                 print(uuid, file=self.stdout)
+
+    @Commands.command(
+        'ancestors',
+        help=['List all the ancestors of a bundle'],
+        arguments=(
+            Commands.Argument(
+                'bundle_spec', help=BUNDLE_SPEC_FORMAT, nargs=1, completer=BundlesCompleter
+            ),
+            Commands.Argument(
+                '-w',
+                '--worksheet-spec',
+                help='Operate on this worksheet (%s).' % WORKSHEET_SPEC_FORMAT,
+                completer=WorksheetsCompleter,
+            ),
+        ),
+    )
+    def do_ancestors_command(self, args):
+        client, worksheet_uuid = self.parse_client_worksheet_uuid(args.worksheet_spec)
+        bundle_uuid = self.target_specs_to_bundle_uuids(client, worksheet_uuid, args.bundle_spec)[0]
+
+        ancestors = {}
+        queue = [bundle_uuid]
+        while queue:
+            curr_bundle_uuid = queue.pop(0)
+            if curr_bundle_uuid in ancestors:
+                continue
+            bundle_info = client.fetch('bundles', curr_bundle_uuid)
+            parent_uuids = [
+                dep['parent_uuid']
+                for dep in bundle_info['dependencies']
+                if dep['child_uuid'] == curr_bundle_uuid
+            ]
+            ancestors[curr_bundle_uuid] = parent_uuids
+            queue.extend(parent_uuids)
+
+        def print_ancestors_recursive(node, level):
+            print('  ' * level + '- {}'.format(node), file=self.stdout)
+            for child in ancestors[node]:
+                print_ancestors_recursive(child, level + 1)
+
+        print_ancestors_recursive(bundle_uuid, 0)
 
     @Commands.command(
         'search',

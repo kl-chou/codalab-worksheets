@@ -953,6 +953,50 @@ def test_rm(ctx):
     _run_command([cl, 'rm', ''], expected_exit_code=1)  # Empty parameter should give an Usage error
 
 
+@TestModule.register('ancestors')
+def test_ancestors(ctx):
+    def format_line(uuid, level):
+        return '  ' * level + '- {}'.format(uuid)
+
+    uuid1 = _run_command([cl, 'upload', test_path('a.txt')])
+    uuid2 = _run_command([cl, 'upload', test_path('b.txt')])
+    check_contains([format_line(uuid1, 0)], _run_command([cl, 'ancestors', uuid1]))
+
+    uuid3 = _run_command([cl, 'make', 'dep1:' + uuid1, 'dep2:' + uuid2])  # first level ancestors
+    check_contains(
+        [format_line(uuid3, 0), format_line(uuid1, 1), format_line(uuid2, 1)],
+        _run_command([cl, 'ancestors', uuid3]),
+    )
+
+    uuid4 = _run_command([cl, 'run', ':{}'.format(uuid3), "cat a.txt/stdout"])
+
+    check_contains(
+        [
+            format_line(uuid4, 0),
+            format_line(uuid3, 1),
+            format_line(uuid1, 2),
+            format_line(uuid2, 2),
+        ],
+        _run_command([cl, 'ancestors', uuid4]),
+    )
+
+    uuid5 = _run_command([cl, 'upload', test_path('dir3')])
+    uuid6 = _run_command(
+        [cl, 'run', ':{}'.format(uuid3), ':{}'.format(uuid5), "cat a.txt/stdout && cat dir3/f1"]
+    )
+    check_contains(
+        [
+            format_line(uuid6, 0),
+            format_line(uuid3, 1),
+            format_line(uuid1, 2),
+            format_line(uuid2, 2),
+            format_line(uuid5, 1),
+        ],
+        _run_command([cl, 'ancestors', uuid6]),
+    )
+    _run_command([cl, 'ancestors', ''], expected_exit_code=1)
+
+
 @TestModule.register('make')
 def test_make(ctx):
     uuid1 = _run_command([cl, 'upload', test_path('a.txt')])
