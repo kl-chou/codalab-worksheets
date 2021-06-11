@@ -2069,6 +2069,7 @@ class BundleCLI(object):
         bundle_uuid = self.target_specs_to_bundle_uuids(client, worksheet_uuid, args.bundle_spec)[0]
 
         ancestors = {}
+        names = {}
         queue = [bundle_uuid]
         while queue:
             curr_bundle_uuid = queue.pop(0)
@@ -2080,11 +2081,16 @@ class BundleCLI(object):
                 for dep in bundle_info['dependencies']
                 if dep['child_uuid'] == curr_bundle_uuid
             ]
+            names[curr_bundle_uuid] = nested_dict_get(bundle_info, 'metadata', 'name', default='')
             ancestors[curr_bundle_uuid] = parent_uuids
             queue.extend(parent_uuids)
 
         def print_ancestors_recursive(node, level):
-            print('  ' * level + '- {}'.format(node), file=self.stdout)
+            print(
+                '  ' * level
+                + '- {}({})'.format(names[node], worksheet_util.apply_func(UUID_POST_FUNC, node)),
+                file=self.stdout,
+            )
             for child in ancestors[node]:
                 print_ancestors_recursive(child, level + 1)
 

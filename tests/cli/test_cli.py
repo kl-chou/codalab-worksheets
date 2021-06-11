@@ -955,44 +955,62 @@ def test_rm(ctx):
 
 @TestModule.register('ancestors')
 def test_ancestors(ctx):
-    def format_line(uuid, level):
-        return '  ' * level + '- {}'.format(uuid)
+    def format_line(uuid, name, level):
+        return '  ' * level + '- {}({})'.format(name, uuid[0:8])
 
     uuid1 = _run_command([cl, 'upload', test_path('a.txt')])
     uuid2 = _run_command([cl, 'upload', test_path('b.txt')])
-    check_contains([format_line(uuid1, 0)], _run_command([cl, 'ancestors', uuid1]))
+    check_contains([format_line(uuid1, 'a.txt', 0)], _run_command([cl, 'ancestors', uuid1[0:8]]))
 
-    uuid3 = _run_command([cl, 'make', 'dep1:' + uuid1, 'dep2:' + uuid2])  # first level ancestors
+    # test first level ancestors
+    bundle_name = 'bundle3'
+    uuid3 = _run_command([cl, 'make', 'dep1:' + uuid1, 'dep2:' + uuid2, '--name', bundle_name])
     check_contains(
-        [format_line(uuid3, 0), format_line(uuid1, 1), format_line(uuid2, 1)],
-        _run_command([cl, 'ancestors', uuid3]),
+        [
+            format_line(uuid3, bundle_name, 0),
+            format_line(uuid1, 'a.txt', 1),
+            format_line(uuid2, 'b.txt', 1),
+        ],
+        _run_command([cl, 'ancestors', uuid3[0:8]]),
     )
 
-    uuid4 = _run_command([cl, 'run', ':{}'.format(uuid3), "cat a.txt/stdout"])
+    # test nested ancestors
+    run_name1 = 'cat1'
+    uuid4 = _run_command([cl, 'run', ':{}'.format(uuid3), "cat a.txt/stdout", '--name', run_name1])
 
     check_contains(
         [
-            format_line(uuid4, 0),
-            format_line(uuid3, 1),
-            format_line(uuid1, 2),
-            format_line(uuid2, 2),
+            format_line(uuid4, run_name1, 0),
+            format_line(uuid3, bundle_name, 1),
+            format_line(uuid1, 'a.txt', 2),
+            format_line(uuid2, 'b.txt', 2),
         ],
-        _run_command([cl, 'ancestors', uuid4]),
+        _run_command([cl, 'ancestors', uuid4[0:8]]),
     )
 
+    # test nested and unnested ancestors
+    run_name2 = 'cat2'
     uuid5 = _run_command([cl, 'upload', test_path('dir3')])
     uuid6 = _run_command(
-        [cl, 'run', ':{}'.format(uuid3), ':{}'.format(uuid5), "cat a.txt/stdout && cat dir3/f1"]
+        [
+            cl,
+            'run',
+            ':{}'.format(uuid3),
+            ':{}'.format(uuid5),
+            "cat a.txt/stdout && cat dir3/f1",
+            '--name',
+            run_name2,
+        ]
     )
     check_contains(
         [
-            format_line(uuid6, 0),
-            format_line(uuid3, 1),
-            format_line(uuid1, 2),
-            format_line(uuid2, 2),
-            format_line(uuid5, 1),
+            format_line(uuid6, run_name2, 0),
+            format_line(uuid3, bundle_name, 1),
+            format_line(uuid1, 'a.txt', 2),
+            format_line(uuid2, 'b.txt', 2),
+            format_line(uuid5, 'dir3', 1),
         ],
-        _run_command([cl, 'ancestors', uuid6]),
+        _run_command([cl, 'ancestors', uuid6[0:8]]),
     )
     _run_command([cl, 'ancestors', ''], expected_exit_code=1)
 
